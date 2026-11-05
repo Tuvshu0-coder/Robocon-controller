@@ -2,6 +2,8 @@
 // Close the Arduino Serial Monitor before connecting from the web page.
 #include <PS4Controller.h>
 
+// ESP32 core 3.x frees Bluetooth memory at boot unless a sketch says it uses it.
+extern "C" bool btInUse() { return true; }
 
 // Button bit order must match BUTTONS in ps4-visualizer.html
 uint32_t readButtons() {

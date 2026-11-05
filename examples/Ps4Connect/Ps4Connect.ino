@@ -6,7 +6,7 @@ extern "C" bool btInUse() { return true; }
 void setup() {
   Serial.begin(115200);
 
-  // Replace the "1a:2b:3c:01:01:01" with the MAC address
+  // Replace the "78:E3:6D:09:23:D6" with the MAC address
   // the controller wants to pair to
   // Note: MAC address must be unicast
   PS4.begin("78:E3:6D:09:23:D6");
