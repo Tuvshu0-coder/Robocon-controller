@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PS4 Input Visualizer</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --line: #262b36;
+    --text: #e6e8ee;
+    --muted: #8a92a6;
+    --body: #24272e;
+    --body-edge: #3a3e48;
+    --part: #3b3f49;
+    --part-edge: #50555f;
+    --glow: #4da3ff;
+    --tri: #3ec7b4;
+    --cir: #ef4f64;
+    --crs: #7b9cf0;
+    --sqr: #f093c2;
+    --ok: #39d17f;
+    --bad: #ef4f64;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 20px 16px 40px; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  h1 { font-size: 20px; margin: 0; font-weight: 600; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button {
+    font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer;
+  }
+  button:hover { border-color: var(--glow); }
+  button.primary { background: var(--glow); border-color: var(--glow); color: #06121f; font-weight: 600; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+  .pill.on .dot { background: var(--ok); }
+  .pill.on { color: var(--text); }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+  .stage { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+  svg { width: 100%; height: auto; display: block; }
+  .side { display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .row { display: flex; justify-content: space-between; padding: 3px 0; font-variant-numeric: tabular-nums; }
+  .row span:first-child { color: var(--muted); }
+  .bar { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; margin: 4px 0 8px; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--glow); transition: width 60ms linear; }
+  .raw { font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--muted); word-break: break-all; min-height: 2.8em; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 12px; }
+  .hint code { color: var(--text); }
+
+  /* Controller parts */
+  .part { fill: var(--part); stroke: var(--part-edge); stroke-width: 2; transition: fill 60ms; }
+  .part.on { fill: var(--glow); stroke: #a8d1ff; filter: url(#glow); }
+  .sym { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+  .on .sym, .part.on + .sym { stroke: #fff; }
+  .lbl { fill: var(--muted); font: 600 13px system-ui, sans-serif; text-anchor: middle; pointer-events: none; }
+  .lbl.dark { fill: #c8ccd6; }
+  .trig-fill { fill: var(--glow); opacity: .85; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>PS4 Input Visualizer</h1>
+    <div class="controls">
+      <span class="pill" id="serialPill"><span class="dot"></span><span id="serialText">ESP32 not connected</span></span>
+      <span class="pill" id="padPill"><span class="dot"></span><span id="padText">Controller off</span></span>
+      <button class="primary" id="connectBtn">Connect ESP32</button>
+      <button id="demoBtn">Demo</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <div class="stage">
+      <svg viewBox="40 40 880 520" aria-label="DualShock 4 controller">
+        <defs>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="5" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <clipPath id="clipL2"><path d="M205 120 Q205 75 258 72 Q311 75 311 120 Z"/></clipPath>
+          <clipPath id="clipR2"><path d="M649 120 Q649 75 702 72 Q755 75 755 120 Z"/></clipPath>
+        </defs>
+
+        <!-- Triggers (L2/R2) with analog fill -->
+        <g id="L2">
+          <path class="part" d="M205 120 Q205 75 258 72 Q311 75 311 120 Z"/>
+          <rect id="L2fill" class="trig-fill" clip-path="url(#clipL2)" x="200" y="120" width="120" height="0"/>
+          <text class="lbl dark" x="258" y="106">L2</text>
+        </g>
+        <g id="R2">
+          <path class="part" d="M649 120 Q649 75 702 72 Q755 75 755 120 Z"/>
+          <rect id="R2fill" class="trig-fill" clip-path="url(#clipR2)" x="640" y="120" width="120" height="0"/>
+          <text class="lbl dark" x="702" y="106">R2</text>
+        </g>
+
+        <!-- Bumpers (L1/R1) -->
+        <rect id="L1" class="part" x="200" y="124" width="116" height="34" rx="12"/>
+        <text class="lbl dark" x="258" y="147">L1</text>
+        <rect id="R1" class="part" x="644" y="124" width="116" height="34" rx="12"/>
+        <text class="lbl dark" x="702" y="147">R1</text>
+
+        <!-- Body -->
+        <path d="M300 152 Q480 138 660 152 L762 160 Q808 168 822 222 L884 430
+                 Q906 522 846 538 Q792 550 742 486 L692 440 Q600 474 480 474
+                 Q360 474 268 440 L218 486 Q168 550 114 538 Q54 522 76 430
+                 L138 222 Q152 168 198 160 Z"
+              fill="var(--body)" stroke="var(--body-edge)" stroke-width="3"/>
+
+        <!-- Light bar -->
+        <rect id="lightbar" x="360" y="156" width="240" height="10" rx="5" fill="#3a3e48"/>
+
+        <!-- Touchpad -->
+        <rect id="Touchpad" class="part" x="362" y="180" width="236" height="128" rx="14"/>
+        <text class="lbl" x="480" y="250">TOUCHPAD</text>
+
+        <!-- Share / Options -->
+        <rect id="Share" class="part" x="318" y="208" width="22" height="42" rx="11"/>
+        <text class="lbl" x="329" y="198" style="font-size:11px">SHARE</text>
+        <rect id="Options" class="part" x="620" y="208" width="22" height="42" rx="11"/>
+        <text class="lbl" x="631" y="198" style="font-size:11px">OPTIONS</text>
+
+        <!-- D-pad -->
+        <circle cx="252" cy="300" r="78" fill="none" stroke="var(--body-edge)" stroke-width="2"/>
+        <path id="Up"    class="part" d="M234 246 h36 v30 l-18 18 l-18 -18 Z"/>
+        <path id="Down"  class="part" d="M234 354 h36 v-30 l-18 -18 l-18 18 Z"/>
+        <path id="Left"  class="part" d="M198 282 v36 h30 l18 -18 l-18 -18 Z"/>
+        <path id="Right" class="part" d="M306 282 v36 h-30 l-18 -18 l18 -18 Z"/>
+
+        <!-- Face buttons -->
+        <circle cx="704" cy="300" r="82" fill="none" stroke="var(--body-edge)" stroke-width="2"/>
+        <g><circle id="Triangle" class="part" cx="704" cy="248" r="26"/>
+           <path class="sym" stroke="var(--tri)" d="M704 236 L716 257 L692 257 Z"/></g>
+        <g><circle id="Circle" class="part" cx="756" cy="300" r="26"/>
+           <circle class="sym" stroke="var(--cir)" cx="756" cy="300" r="11"/></g>
+        <g><circle id="Cross" class="part" cx="704" cy="352" r="26"/>
+           <path class="sym" stroke="var(--crs)" d="M694 342 L714 362 M714 342 L694 362"/></g>
+        <g><circle id="Square" class="part" cx="652" cy="300" r="26"/>
+           <rect class="sym" stroke="var(--sqr)" x="642" y="290" width="20" height="20"/></g>
+
+        <!-- Sticks -->
+        <circle cx="362" cy="404" r="50" fill="#1b1d22" stroke="var(--body-edge)" stroke-width="2"/>
+        <circle cx="598" cy="404" r="50" fill="#1b1d22" stroke="var(--body-edge)" stroke-width="2"/>
+        <g id="LStick"><circle id="L3" class="part" cx="362" cy="404" r="30"/><text class="lbl dark" x="362" y="409">L3</text></g>
+        <g id="RStick"><circle id="R3" class="part" cx="598" cy="404" r="30"/><text class="lbl dark" x="598" y="409">R3</text></g>
+
+        <!-- PS button -->
+        <circle id="PS" class="part" cx="480" cy="372" r="20"/>
+        <text class="lbl dark" x="480" y="377" style="font-size:12px">PS</text>
+      </svg>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h2>Sticks</h2>
+        <div class="row"><span>Left X / Y</span><span id="lxy">0 / 0</span></div>
+        <div class="row"><span>Right X / Y</span><span id="rxy">0 / 0</span></div>
+      </div>
+      <div class="card">
+        <h2>Triggers</h2>
+        <div class="row"><span>L2</span><span id="l2v">0</span></div>
+        <div class="bar"><i id="l2bar"></i></div>
+        <div class="row"><span>R2</span><span id="r2v">0</span></div>
+        <div class="bar"><i id="r2bar"></i></div>
+      </div>
+      <div class="card">
+        <h2>Battery</h2>
+        <div class="row"><span>Level</span><span id="batt">–</span></div>
+        <div class="bar"><i id="battbar"></i></div>
+      </div>
+      <div class="card">
+        <h2>Pressed</h2>
+        <div id="pressed" class="raw">–</div>
+        <h2 style="margin-top:12px">Last line from ESP32</h2>
+        <div id="raw" class="raw">–</div>
+        <div class="row" style="margin-top:6px"><span>Updates / sec</span><span id="rate">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="hint">
+    Flash <code>examples/PS4Visualizer</code> to the ESP32, <b>close the Arduino Serial Monitor</b>,
+    then click <b>Connect ESP32</b> and choose the ESP32's COM port. Works in Chrome or Edge.
+  </p>
+</div>
+
+<script>
+// Bit order must match readButtons() in PS4Visualizer.ino
+const BUTTONS = ["Up","Down","Left","Right","Square","Cross","Circle","Triangle",
+                 "L1","R1","L2","R2","Share","Options","L3","R3","PS","Touchpad"];
+const STICK_TRAVEL = 22;  // pixels the stick cap moves at full tilt
+
+const $ = id => document.getElementById(id);
+let lines = 0, port = null, reader = null, demoTimer = null;
+
+function setPill(id, on, text) {
+  $(id + "Pill").classList.toggle("on", on);
+  $(id + "Text").textContent = text;
+}
+
+function render(s) {
+  BUTTONS.forEach((name, i) => {
+    const pressed = s.connected && (s.buttons >> i) & 1;
+    const el = $(name);
+    const target = el.tagName === "g" ? el.querySelector(".part") : el;
+    target.classList.toggle("on", !!pressed);
+  });
+
+  const mv = v => (v / 128) * STICK_TRAVEL;
+  $("LStick").setAttribute("transform", `translate(${mv(s.lx)} ${-mv(s.ly)})`);
+  $("RStick").setAttribute("transform", `translate(${mv(s.rx)} ${-mv(s.ry)})`);
+
+  const trig = (id, v) => {
+    const h = (v / 255) * 50;
+    $(id).setAttribute("y", 120 - h);
+    $(id).setAttribute("height", h);
+  };
+  trig("L2fill", s.l2); trig("R2fill", s.r2);
+
+  $("lightbar").setAttribute("fill", s.connected ? "#3d8bff" : "#3a3e48");
+  $("lxy").textContent = `${s.lx} / ${s.ly}`;
+  $("rxy").textContent = `${s.rx} / ${s.ry}`;
+  $("l2v").textContent = s.l2; $("l2bar").style.width = (s.l2 / 2.55) + "%";
+  $("r2v").textContent = s.r2; $("r2bar").style.width = (s.r2 / 2.55) + "%";
+
+  // DS4 battery runs 0-10 on battery, up to 11 while charging
+  const pct = Math.min(100, Math.round((s.battery / 10) * 100));
+  $("batt").textContent = s.connected ? `${pct}%${s.charging ? " (charging)" : ""}` : "–";
+  $("battbar").style.width = (s.connected ? pct : 0) + "%";
+
+  const names = BUTTONS.filter((_, i) => (s.buttons >> i) & 1);
+  $("pressed").textContent = s.connected ? (names.join("  ") || "–") : "–";
+  setPill("pad", s.connected, s.connected ? "Controller connected" : "Controller off");
+}
+
+function handleLine(line) {
+  line = line.trim();
+  if (!line.startsWith("P,")) return;
+  const f = line.slice(2).split(",").map(Number);
+  if (f.length < 10 || f.some(Number.isNaN)) return;
+  lines++;
+  $("raw").textContent = line;
+  render({ connected: f[0] === 1, buttons: f[1], l2: f[2], r2: f[3],
+           lx: f[4], ly: f[5], rx: f[6], ry: f[7], battery: f[8], charging: f[9] === 1 });
+}
+
+setInterval(() => { $("rate").textContent = lines; lines = 0; }, 1000);
+
+async function connect() {
+  if (!("serial" in navigator)) {
+    alert("This browser can't talk to serial ports. Please open this file in Chrome or Edge.");
+    return;
+  }
+  stopDemo();
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+  } catch (e) {
+    if (e.name !== "NotFoundError") {
+      alert("Could not open the port: " + e.message +
+            "\n\nIs the Arduino Serial Monitor still open? Close it and try again.");
+    }
+    return;
+  }
+  setPill("serial", true, "ESP32 connected");
+  $("connectBtn").textContent = "Disconnect";
+
+  const decoder = new TextDecoderStream();
+  const closed = port.readable.pipeTo(decoder.writable).catch(() => {});
+  reader = decoder.readable.getReader();
+  let buf = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += value;
+      const parts = buf.split("\n");
+      buf = parts.pop();
+      parts.forEach(handleLine);
+    }
+  } catch (e) { /* device unplugged */ }
+  try { reader.releaseLock(); } catch (e) {}
+  await closed;
+  try { await port.close(); } catch (e) {}
+  port = null; reader = null;
+  setPill("serial", false, "ESP32 not connected");
+  $("connectBtn").textContent = "Connect ESP32";
+  render({ connected: false, buttons: 0, l2: 0, r2: 0, lx: 0, ly: 0, rx: 0, ry: 0, battery: 0, charging: false });
+}
+
+async function disconnect() {
+  if (reader) await reader.cancel().catch(() => {});
+}
+
+// Demo mode: fake input so you can check the page without hardware
+function startDemo() {
+  let t = 0;
+  $("demoBtn").textContent = "Stop demo";
+  demoTimer = setInterval(() => {
+    t += 0.05;
+    const btn = 1 << (Math.floor(t * 2) % BUTTONS.length);
+    const l2 = Math.round((Math.sin(t * 2) + 1) * 127.5);
+    handleLine(`P,1,${btn},${l2},${255 - l2},${Math.round(Math.cos(t) * 127)},${Math.round(Math.sin(t) * 127)},` +
+               `${Math.round(Math.sin(t * 1.3) * 127)},${Math.round(Math.cos(t * 0.7) * 127)},8,0`);
+  }, 20);
+}
+function stopDemo() {
+  if (!demoTimer) return;
+  clearInterval(demoTimer); demoTimer = null;
+  $("demoBtn").textContent = "Demo";
+  handleLine("P,0,0,0,0,0,0,0,0,0,0");
+}
+
+$("connectBtn").onclick = () => (port ? disconnect() : connect());
+$("demoBtn").onclick = () => (demoTimer ? stopDemo() : startDemo());
+render({ connected: false, buttons: 0, l2: 0, r2: 0, lx: 0, ly: 0, rx: 0, ry: 0, battery: 0, charging: false });
+if (location.hash === "#demo") startDemo();
+</script>
+</body>
+</html>
